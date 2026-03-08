@@ -8,7 +8,7 @@ import ResourcePanel from '../components/ResourcePanel';
 import LoadingState from '../components/LoadingState';
 import TubesBackground from '../components/TubesBackground';
 import LearningPathMap from '../components/LearningPathMap';
-import KnowledgeContext from '../components/KnowledgeContext';
+import LearningPathMap from '../components/LearningPathMap';
 import { cn } from '../lib/utils';
 import { auth } from '../firebase';
 // Assuming cn utility is available here
@@ -19,7 +19,6 @@ const TABS = [
     { id: 'recommendations', label: 'Recommendations', icon: Lightbulb, color: 'text-amber-400', accent: 'bg-amber-400' },
     { id: 'practice', label: 'Practice', icon: BookOpen, color: 'text-emerald-400', accent: 'bg-emerald-400' },
     { id: 'resources', label: 'Resources', icon: Youtube, color: 'text-red-400', accent: 'bg-red-400' },
-    { id: 'context', label: 'Knowledge Context', icon: Brain, color: 'text-blue-400', accent: 'bg-blue-400' },
 ];
 
 const Dashboard = () => {
@@ -198,30 +197,6 @@ const Dashboard = () => {
         }
     }, [profile, apiFetch]);
 
-    const handleDownloadSyllabus = useCallback(() => {
-        if (!mapData || !mapData.nodes) return;
-
-        const syllabus = `QUESTMAP SYLLABUS: ${profile.topic.toUpperCase()}\n` +
-            `Target Tier: ${profile.skill_level.toUpperCase()}\n` +
-            `==========================================\n\n` +
-            mapData.nodes.map((node, i) => (
-                `${i + 1}. ${node.label.toUpperCase()} (${node.bloom_level})\n` +
-                `   Est. Time: ${node.estimated_hours}h\n` +
-                `   Concepts: ${node.key_concepts?.join(', ') || 'N/A'}\n` +
-                `   Objectives: ${node.description}\n`
-            )).join('\n');
-
-        const blob = new Blob([syllabus], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `QuestMap_Syllabus_${profile.topic.replace(/\s+/g, '_')}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [mapData, profile]);
-
     const handleLogout = () => {
         sessionStorage.removeItem('questmap_profile');
         navigate('/');
@@ -392,12 +367,6 @@ const Dashboard = () => {
                                                 {(selectedNode.status || '').replace('_', ' ')}
                                             </span>
                                         </div>
-                                        <button
-                                            onClick={handleDownloadSyllabus}
-                                            className="px-8 py-4 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 flex items-center gap-2"
-                                        >
-                                            <Download className="w-3.5 h-3.5" /> Download Syllabus
-                                        </button>
                                     </div>
                                 </div>
                             </motion.div>
@@ -467,13 +436,6 @@ const Dashboard = () => {
                             {activeTab === 'resources' && (
                                 <motion.div key="res" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                                     <ResourcePanel resourceData={resourceData} loading={loading.resources} selectedNode={selectedNode} />
-                                </motion.div>
-                            )}
-                            {activeTab === 'context' && (
-                                <motion.div key="ctx" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                                    <KnowledgeContext 
-                                        context={selectedNode ? (practiceData?._debug_context || resourceData?._debug_context) : (recDebugContext || mapData?._debug_context)} 
-                                    />
                                 </motion.div>
                             )}
                         </AnimatePresence>
