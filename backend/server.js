@@ -108,8 +108,8 @@ async function resolveYouTubeUrls(resourceData) {
 }
 
 /**
- * Resolve an article search query into a real URL by scraping DuckDuckGo HTML search results.
- * Extracts the first real result URL from the page.
+ * Resolve an article search query into a real URL + title by scraping DuckDuckGo HTML search results.
+ * Extracts the first real result URL and its page title from DDG results.
  */
 async function resolveArticleUrl(searchQuery) {
     try {
@@ -128,29 +128,33 @@ async function resolveArticleUrl(searchQuery) {
         if (!res.ok) throw new Error(`DuckDuckGo returned ${res.status}`);
 
         const html = await res.text();
-        // DDG HTML puts result links in class="result__a" href="..."
-        const resultLinks = [...html.matchAll(/class="result__a"[^>]*href="([^"]+)"/g)];
-
-        for (const match of resultLinks) {
+        // DDG HTML: <a class="result__a" href="URL">TITLE</a>
+        const resultPattern = /class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]+)</g;
+        const results = [...html.matchAll(resultPattern)];
+        
+        for (const match of results) {
             let url = match[1];
+            let realTitle = match[2].trim().replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
             // DDG sometimes wraps URLs in //duckduckgo.com/l/?uddg=...
             if (url.includes('uddg=')) {
                 url = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
             }
             // Skip google/youtube/DDG internal links
             if (!url.includes('google.com') && !url.includes('youtube.com') && !url.includes('duckduckgo.com')) {
-                return url;
+                // Extract the source/domain from the URL
+                let realSource = null;
+                try { realSource = new URL(url).hostname.replace('www.', ''); } catch {}
+                return { url, realTitle, realSource };
             }
         }
     } catch (err) {
         console.warn(`Article URL resolve failed for "${searchQuery}":`, err.message);
     }
-    // Fallback: Google search URL
-    return `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+    return { url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, realTitle: null, realSource: null };
 }
 
 /**
- * Resolve all article search queries in resource data to real article URLs.
+ * Resolve all article search queries in resource data to real article URLs + titles.
  */
 async function resolveArticleUrls(resourceData) {
     if (!resourceData?.articles?.length) return resourceData;
@@ -158,8 +162,14 @@ async function resolveArticleUrls(resourceData) {
     const resolved = await Promise.all(
         resourceData.articles.map(async (article) => {
             const query = article.search_query || `${article.title || ''} ${article.source || ''}`.trim();
-            const resolvedUrl = await resolveArticleUrl(query);
-            return { ...article, url: resolvedUrl, search_query: query };
+            const result = await resolveArticleUrl(query);
+            return {
+                ...article,
+                url: result.url,
+                title: result.realTitle || article.title,       // Use real title if available
+                source: result.realSource || article.source,     // Use real source if available
+                search_query: query,
+            };
         })
     );
 
