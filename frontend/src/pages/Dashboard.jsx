@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, Map, Lightbulb, BookOpen, Youtube, LogOut, User, Clock, Brain, ChevronRight, Sparkles, RefreshCw, Download } from 'lucide-react';
+import { Compass, Map, Lightbulb, BookOpen, Youtube, LogOut, User, Clock, Brain, ChevronRight, Sparkles, RefreshCw, Download, X } from 'lucide-react';
 import RecommendationList from '../components/RecommendationCard';
 import PracticePanel from '../components/PracticePanel';
 import ResourcePanel from '../components/ResourcePanel';
 import LoadingState from '../components/LoadingState';
 import TubesBackground from '../components/TubesBackground';
-import SphereKnowledgeMap from '../components/SphereKnowledgeMap';
+import LearningPathMap from '../components/LearningPathMap';
 import { cn } from '../lib/utils';
 import { auth } from '../firebase';
 // Assuming cn utility is available here
@@ -39,6 +39,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState({ profile: false, map: false, recommendations: false, practice: false, resources: false });
     const [error, setError] = useState(null);
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+    const [documents, setDocuments] = useState([]);
 
     // Load profile from sessionStorage on mount
     useEffect(() => {
@@ -319,17 +320,11 @@ const Dashboard = () => {
                     <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-purple-500/10 rounded-full blur-[100px]" />
                 </div>
 
-                {/* Left: 3D Knowledge Map */}
+                {/* Left: Learning Path Map */}
                 <div className="flex-1 flex flex-col min-w-0 relative z-10">
-                    {/* Map Interaction hints */}
-                    <div className="absolute top-6 left-8 flex items-center gap-4 text-[9px] font-black uppercase tracking-[0.3em] text-white/30 pointer-events-none">
-                        <span className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-white/40" /> DRAG TO ROTATE</span>
-                        <span className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-white/40" /> CLICK NODE TO ANALYZE</span>
-                    </div>
-
-                    {/* 3D Map Viewport */}
+                    {/* Map */}
                     <div className="flex-1 overflow-hidden">
-                        <SphereKnowledgeMap
+                        <LearningPathMap
                             mapData={mapData}
                             selectedNode={selectedNode}
                             onNodeSelect={handleNodeSelect}
@@ -345,7 +340,13 @@ const Dashboard = () => {
                                 exit={{ y: 100, opacity: 0 }}
                                 className="absolute bottom-8 left-8 right-8 z-30"
                             >
-                                <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex items-center justify-between gap-12 group">
+                                <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex items-center justify-between gap-12 group relative">
+                                    <button
+                                        onClick={() => setSelectedNode(null)}
+                                        className="absolute -top-3 -right-3 w-8 h-8 bg-gray-800 text-gray-400 hover:text-white rounded-full flex items-center justify-center border border-white/10 shadow-xl transition-colors z-40"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-4 mb-2">
                                             <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black uppercase tracking-widest text-blue-400">

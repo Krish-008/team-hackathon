@@ -2,8 +2,25 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const mongoose = require('mongoose');
+const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Quest = require('./models/Quest');
+const Document = require('./models/Document');
+const { initRAG, storeSessionContext, storeDocumentChunks, retrieveRelevantContext, formatRAGContext, chunkText } = require('./ragService');
+const { parseFile, SUPPORTED_MIMETYPES } = require('./fileParser');
+
+// Multer config — memory storage, 10MB max
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (SUPPORTED_MIMETYPES.includes(file.mimetype) || /\.(pdf|docx|txt)$/i.test(file.originalname)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Unsupported file type. Only PDF, DOCX, and TXT are allowed.'));
+        }
+    },
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,9 +35,16 @@ app.use(express.json());
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log('Connected to MongoDB Atlas'))
-        .catch(err => console.error('MongoDB identification failure:', err));
+        .catch(err => console.error('MongoDB connection failure:', err.message));
 } else {
     console.warn('MONGODB_URI not found in .env. Persistence disabled.');
+}
+
+// Initialize Pinecone RAG (non-blocking)
+if (process.env.PINECONE_API_KEY) {
+    initRAG().then(() => console.log('RAG system initialized.')).catch(err => console.warn('RAG init skipped:', err.message));
+} else {
+    console.warn('PINECONE_API_KEY not found. RAG disabled.');
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -265,7 +289,7 @@ Generate 5-8 learning history entries that would realistically precede studying 
 // ─── 2. Generate Knowledge Map (Enhanced) ───────────────────────────────────
 
 app.post('/api/generate-map', async (req, res) => {
-    const { topic, skill_level, background, goals, learning_history } = req.body;
+    const { topic, skill_level, background, goals, learning_history, userId } = req.body;
 
     if (!topic) {
         return res.status(400).json({ error: 'Topic is required' });
@@ -320,7 +344,39 @@ Mark 1-2 nodes as "recommended_next" — these are what the learner should focus
 
     try {
         console.log(`[${new Date().toISOString()}] Map generation for: "${topic}"`);
-        const json = await callGemini(prompt);
+        
+        // RAG: Retrieve categorized document context
+        let sourceContextStr = '';
+        let personalContextStr = '';
+
+        if (userId && process.env.PINECONE_API_KEY) {
+            try {
+                const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, topic, 15);
+                
+                if (sourceMaterials.length > 0) {
+                    sourceContextStr = '\n\n### Source Material Context (CRITICAL: Use this to define the strict curriculum structure and chapters)\n';
+                    sourceMaterials.forEach(m => sourceContextStr += `[From "${m.filename}"]: ${m.content}\n`);
+                }
+                if (contextMaterials.length > 0) {
+                    personalContextStr = '\n\n### Personal Context (CRITICAL: Use this to identify the user\'s weak points, prior knowledge, and exam mistakes)\n';
+                    contextMaterials.forEach(m => personalContextStr += `[From "${m.filename}"]: ${m.content}\n`);
+                }
+                console.log(`[${new Date().toISOString()}] Map RAG injected (${sourceMaterials.length} source chunks, ${contextMaterials.length} context chunks).`);
+            } catch (ragErr) {
+                console.warn('Map generation RAG retrieval skipped:', ragErr.message);
+            }
+        }
+
+        const ragInstructions = (sourceContextStr || personalContextStr) ? `
+        
+IMPORTANT RAG INSTRUCTIONS:
+${sourceContextStr ? '- Based on the Source Material provided, STRICTLY build the core sub-topics to match that structure and chapter flow.' : ''}
+${personalContextStr ? '- Based on the Personal Context provided, adjust the difficulty, identify weak areas (e.g., from exam mistakes) and mark them as "recommended_next", and pre-mark topics they already know as "completed".' : ''}
+` : '';
+
+        const fullPrompt = prompt + sourceContextStr + personalContextStr + ragInstructions;
+
+        const json = await callGemini(fullPrompt);
         console.log(`[${new Date().toISOString()}] Map generated with ${json.nodes?.length} nodes.`);
         res.json(json);
     } catch (error) {
@@ -373,8 +429,30 @@ Generate exactly 6 recommendations ordered by priority. At least 2 must be "high
 
     try {
         console.log(`[${new Date().toISOString()}] Recommendations for: "${topic}"`);
-        const json = await callGemini(prompt);
+        
+        // RAG: Retrieve relevant past context
+        let ragContext = '';
+        const userId = req.body.userId || 'anonymous';
+        if (process.env.PINECONE_API_KEY) {
+            try {
+                const ragResults = await retrieveRelevantContext(userId, `${topic} ${skill_level || ''}`);
+                ragContext = formatRAGContext(ragResults);
+                if (ragContext) console.log(`[${new Date().toISOString()}] RAG context injected (${ragResults.sessions.length} sessions, ${ragResults.documents.length} doc chunks).`);
+            } catch (ragErr) {
+                console.warn('RAG retrieval skipped:', ragErr.message);
+            }
+        }
+
+        // Rebuild prompt with RAG context
+        const fullPrompt = ragContext ? prompt + '\n' + ragContext : prompt;
+        const json = await callGemini(fullPrompt);
         console.log(`[${new Date().toISOString()}] Generated ${json.recommendations?.length} recommendations.`);
+        
+        // Auto-store session context in Pinecone (non-blocking)
+        if (process.env.PINECONE_API_KEY) {
+            storeSessionContext(userId, { topic, skill_level, type: 'recommendations', node_label: 'overview', summary: `Generated ${json.recommendations?.length} recommendations for ${topic}` }).catch(() => {});
+        }
+        
         res.json(json);
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Recommendations Error:`, error.message);
@@ -574,6 +652,92 @@ app.delete('/api/quest/:id', async (req, res) => {
         res.json({ message: 'Quest deleted' });
     } catch (err) {
         res.status(500).json({ error: 'Failed to delete entry', details: err.message });
+    }
+});
+
+// ─── 7. File Upload & Document Management ──────────────────────────────────
+
+app.post('/api/upload-document', upload.single('file'), async (req, res) => {
+    const { userId, category = 'source' } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    let doc = null;
+    try {
+        // Save document metadata to MongoDB
+        if (process.env.MONGODB_URI) {
+            doc = new Document({
+                userId,
+                category,
+                filename: req.file.originalname,
+                mimetype: req.file.mimetype,
+                fileSize: req.file.size,
+                status: 'processing',
+            });
+            await doc.save();
+        }
+
+        // Parse file
+        console.log(`[${new Date().toISOString()}] Parsing file: ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
+        const text = await parseFile(req.file.buffer, req.file.mimetype, req.file.originalname);
+        console.log(`[${new Date().toISOString()}] Extracted ${text.length} characters.`);
+
+        // Chunk text
+        const chunks = chunkText(text, 500, 100);
+        console.log(`[${new Date().toISOString()}] Split into ${chunks.length} chunks.`);
+
+        // Store in Pinecone
+        let storedCount = 0;
+        if (process.env.PINECONE_API_KEY && chunks.length > 0) {
+            const docId = doc ? doc._id.toString() : `temp_${Date.now()}`;
+            storedCount = await storeDocumentChunks(userId, docId, chunks, req.file.originalname, category);
+        }
+
+        // Update document status
+        if (doc) {
+            doc.chunkCount = storedCount;
+            doc.textLength = text.length;
+            doc.status = 'ready';
+            await doc.save();
+        }
+
+        res.json({
+            message: 'Document uploaded and processed successfully',
+            document: {
+                id: doc?._id,
+                filename: req.file.originalname,
+                textLength: text.length,
+                chunkCount: chunks.length,
+                storedVectors: storedCount,
+                status: 'ready',
+            },
+        });
+    } catch (err) {
+        console.error(`[${new Date().toISOString()}] Upload Error:`, err.message);
+        if (doc) {
+            doc.status = 'failed';
+            await doc.save().catch(() => {});
+        }
+        res.status(500).json({ error: 'Failed to process document', details: err.message });
+    }
+});
+
+app.get('/api/user-documents/:uid', async (req, res) => {
+    try {
+        if (!process.env.MONGODB_URI) return res.json([]);
+        const docs = await Document.find({ userId: req.params.uid }).sort({ uploadedAt: -1 });
+        res.json(docs);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch documents', details: err.message });
+    }
+});
+
+app.delete('/api/document/:id', async (req, res) => {
+    try {
+        await Document.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Document deleted' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete document', details: err.message });
     }
 });
 

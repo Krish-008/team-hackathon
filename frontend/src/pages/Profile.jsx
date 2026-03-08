@@ -7,6 +7,7 @@ import { signOut } from 'firebase/auth';
 import LoadingState from '../components/LoadingState';
 import TubesBackground from '../components/TubesBackground';
 import QuestLog from '../components/QuestLog';
+import DocumentUpload from '../components/DocumentUpload';
 
 const SKILL_LEVELS = [
     { value: 'beginner', label: 'Beginner', desc: 'Just starting out', color: 'from-green-500 to-emerald-600', icon: '🌱' },
@@ -25,14 +26,27 @@ const Profile = () => {
     const [quests, setQuests] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [documents, setDocuments] = useState([]);
 
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged((user) => {
             setCurrentUser(user);
-            if (user) fetchQuests(user.uid);
+            if (user) {
+                fetchQuests(user.uid);
+                fetchDocuments(user.uid);
+            }
         });
         return unsubscribe;
     }, []);
+
+    const fetchDocuments = async (uid) => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/user-documents/${uid}`);
+            if (res.ok) setDocuments(await res.json());
+        } catch (err) {
+            console.error("Failed to fetch documents:", err);
+        }
+    };
 
     const fetchQuests = async (uid) => {
         setLoadingHistory(true);
@@ -301,6 +315,20 @@ const Profile = () => {
                                     />
                                 </div>
                             </div>
+
+                            {currentUser && (
+                                <div className="space-y-4">
+                                    <label className="flex items-center gap-3 text-[11px] font-black text-purple-400 uppercase tracking-[0.3em] font-outfit">
+                                        <BookOpen className="w-4 h-4" />
+                                        Context Upload <span className="text-white/20 font-black lowercase tracking-normal ml-2">(optional)</span>
+                                    </label>
+                                    <DocumentUpload
+                                        userId={currentUser.uid}
+                                        documents={documents}
+                                        onDocumentsChange={() => fetchDocuments(currentUser.uid)}
+                                    />
+                                </div>
+                            )}
 
                             <motion.button
                                 type="submit"
