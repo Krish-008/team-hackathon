@@ -6,7 +6,7 @@ const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Quest = require('./models/Quest');
 const Document = require('./models/Document');
-const { initRAG, storeSessionContext, storeDocumentChunks, retrieveRelevantContext, formatRAGContext, chunkText } = require('./ragService');
+const { initRAG, storeSessionContext, storeDocumentChunks, retrieveRelevantContext, retrieveCategorizedContext, formatRAGContext, chunkText } = require('./ragService');
 const { parseFile, SUPPORTED_MIMETYPES } = require('./fileParser');
 
 // Multer config — memory storage, 10MB max
@@ -349,9 +349,14 @@ Mark 1-2 nodes as "recommended_next" — these are what the learner should focus
         let sourceContextStr = '';
         let personalContextStr = '';
 
+        let sourceMaterials = [];
+        let contextMaterials = [];
+
         if (userId && process.env.PINECONE_API_KEY) {
             try {
-                const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, topic, 15);
+                const results = await retrieveCategorizedContext(userId, topic, 15);
+                sourceMaterials = results.sourceMaterials;
+                contextMaterials = results.contextMaterials;
                 
                 if (sourceMaterials.length > 0) {
                     sourceContextStr = '\n\n### Source Material Context (CRITICAL: Use this to define the strict curriculum structure and chapters)\n';
@@ -378,7 +383,15 @@ ${personalContextStr ? '- Based on the Personal Context provided, adjust the dif
 
         const json = await callGemini(fullPrompt);
         console.log(`[${new Date().toISOString()}] Map generated with ${json.nodes?.length} nodes.`);
-        res.json(json);
+        
+        // Attach retrieval context for transparency
+        res.json({
+            ...json,
+            _debug_context: {
+                source: sourceMaterials.map(m => ({ filename: m.filename, content: m.content })),
+                personal: contextMaterials.map(m => ({ filename: m.filename, content: m.content }))
+            }
+        });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Map Error:`, error.message);
         res.status(500).json({ error: 'Failed to generate map', details: error.message });

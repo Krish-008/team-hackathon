@@ -8,6 +8,7 @@ import ResourcePanel from '../components/ResourcePanel';
 import LoadingState from '../components/LoadingState';
 import TubesBackground from '../components/TubesBackground';
 import LearningPathMap from '../components/LearningPathMap';
+import KnowledgeContext from '../components/KnowledgeContext';
 import { cn } from '../lib/utils';
 import { auth } from '../firebase';
 // Assuming cn utility is available here
@@ -18,6 +19,7 @@ const TABS = [
     { id: 'recommendations', label: 'Recommendations', icon: Lightbulb, color: 'text-amber-400', accent: 'bg-amber-400' },
     { id: 'practice', label: 'Practice', icon: BookOpen, color: 'text-emerald-400', accent: 'bg-emerald-400' },
     { id: 'resources', label: 'Resources', icon: Youtube, color: 'text-red-400', accent: 'bg-red-400' },
+    { id: 'context', label: 'Knowledge Context', icon: Brain, color: 'text-blue-400', accent: 'bg-blue-400' },
 ];
 
 const Dashboard = () => {
@@ -95,8 +97,11 @@ const Dashboard = () => {
 
             try {
                 // Step 1: Generate profile & learning history
+                const currentUser = auth.currentUser;
+                const uid = currentUser ? currentUser.uid : (sessionStorage.getItem('questmap_uid') || 'anonymous');
+
                 setLoading(l => ({ ...l, profile: true }));
-                const profResult = await apiFetch('generate-profile', profile);
+                const profResult = await apiFetch('generate-profile', { ...profile, userId: uid });
                 setProfileData(profResult);
                 setLoading(l => ({ ...l, profile: false }));
 
@@ -104,6 +109,7 @@ const Dashboard = () => {
                 setLoading(l => ({ ...l, map: true }));
                 const mapResult = await apiFetch('generate-map', {
                     ...profile,
+                    userId: uid,
                     learning_history: profResult.learning_history,
                 });
                 setMapData(mapResult);
@@ -113,6 +119,7 @@ const Dashboard = () => {
                 setLoading(l => ({ ...l, recommendations: true }));
                 const recResult = await apiFetch('generate-recommendations', {
                     ...profile,
+                    userId: uid,
                     learning_history: profResult.learning_history,
                     knowledge_gaps: profResult.knowledge_gaps,
                 });
@@ -450,6 +457,11 @@ const Dashboard = () => {
                             {activeTab === 'resources' && (
                                 <motion.div key="res" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                                     <ResourcePanel resourceData={resourceData} loading={loading.resources} />
+                                </motion.div>
+                            )}
+                            {activeTab === 'context' && (
+                                <motion.div key="ctx" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                                    <KnowledgeContext context={mapData._debug_context} />
                                 </motion.div>
                             )}
                         </AnimatePresence>

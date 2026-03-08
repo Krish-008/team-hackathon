@@ -226,12 +226,20 @@ async function retrieveCategorizedContext(userId, query, topK = 10) {
     try {
         const queryEmbedding = await generateEmbedding(query);
 
+        console.log(`[RAG DEBUG] Querying Pinecone for User: ${userId}, Topic: "${query}"`);
         const docResults = await pineconeIndex.namespace('documents').query({
             vector: queryEmbedding,
             topK: topK,
             includeMetadata: true,
             filter: { userId: { $eq: userId } },
         });
+
+        console.log(`[RAG DEBUG] Raw matches found: ${docResults.matches?.length || 0}`);
+        if (docResults.matches?.length > 0) {
+            docResults.matches.forEach((m, i) => {
+                console.log(`  - Match ${i}: Score: ${m.score.toFixed(4)}, File: ${m.metadata?.filename}`);
+            });
+        }
 
         const matches = (docResults.matches || [])
             .filter(m => m.score > 0.3)
