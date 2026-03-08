@@ -182,10 +182,18 @@ const TypeIcon = ({ type }) => {
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 
-const PracticePanel = ({ practiceData, loading }) => {
+const PracticePanel = ({ practiceData, loading, selectedNode }) => {
     if (loading) {
         return (
             <div className="space-y-4">
+                {selectedNode && (
+                    <div className="flex items-center gap-2 mb-6 animate-pulse">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                            Generating Practice for: {selectedNode.label}
+                        </span>
+                    </div>
+                )}
                 {[1, 2, 3].map(i => (
                     <div key={i} className="animate-pulse bg-gray-800/40 rounded-2xl h-32 border border-gray-700/30" />
                 ))}
@@ -204,6 +212,14 @@ const PracticePanel = ({ practiceData, loading }) => {
 
     return (
         <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-320px)] pr-1 custom-scrollbar">
+            {selectedNode && (
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Practice: {selectedNode.label}
+                    </span>
+                </div>
+            )}
             {practiceData.practice_title && (
                 <h3 className="text-white font-bold text-base">{practiceData.practice_title}</h3>
             )}

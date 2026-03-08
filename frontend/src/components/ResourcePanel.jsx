@@ -150,10 +150,18 @@ const BookCard = ({ book, index }) => {
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 
-const ResourcePanel = ({ resourceData, loading }) => {
+const ResourcePanel = ({ resourceData, loading, selectedNode }) => {
     if (loading) {
         return (
             <div className="space-y-4">
+                {selectedNode && (
+                    <div className="flex items-center gap-2 mb-6 animate-pulse">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                            Loading Resources for: {selectedNode.label}
+                        </span>
+                    </div>
+                )}
                 {[1, 2, 3, 4].map(i => (
                     <div key={i} className="animate-pulse bg-gray-800/40 rounded-2xl h-28 border border-gray-700/30" />
                 ))}
@@ -172,6 +180,14 @@ const ResourcePanel = ({ resourceData, loading }) => {
 
     return (
         <div className="space-y-5 overflow-y-auto max-h-[calc(100vh-320px)] pr-1 custom-scrollbar">
+            {selectedNode && (
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Resources for: {selectedNode.label}
+                    </span>
+                </div>
+            )}
             {/* YouTube Section */}
             {resourceData.youtube_videos?.length > 0 && (
                 <div>

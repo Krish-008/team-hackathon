@@ -476,13 +476,29 @@ Generate exactly 6 recommendations ordered by priority. At least 2 must be "high
 // ─── 4. Generate Practice Scenarios ─────────────────────────────────────────
 
 app.post('/api/generate-practice', async (req, res) => {
-    const { topic, node_label, skill_level, key_concepts } = req.body;
+    const { topic, node_label, skill_level, key_concepts, userId } = req.body;
 
     if (!topic || !node_label) {
         return res.status(400).json({ error: 'Topic and node_label are required' });
     }
 
+    let referenceContext = '';
+    if (userId && process.env.PINECONE_API_KEY) {
+        try {
+            const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            if (sourceMaterials.length > 0 || contextMaterials.length > 0) {
+                referenceContext = '\n\n### REFERENCE MATERIAL FROM UPLOADED DOCUMENTS (Ground the questions in this context):\n';
+                [...sourceMaterials, ...contextMaterials].forEach(m => {
+                    referenceContext += `- [${m.filename}]: ${m.content}\n`;
+                });
+            }
+        } catch (e) {
+            console.warn("RAG retrieval for practice failed:", e.message);
+        }
+    }
+
     const prompt = `${SYSTEM_PERSONA}
+${referenceContext}
 
 The learner is studying "${topic}" and is currently on the sub-topic: "${node_label}"
 Skill level: "${skill_level || 'beginner'}"
@@ -543,13 +559,29 @@ Generate exactly 5 scenarios: 2 multiple_choice, 2 scenario, 1 code_challenge. E
 // ─── 5. Generate External Resources (YouTube Snippets + Articles) ──────────
 
 app.post('/api/generate-resources', async (req, res) => {
-    const { topic, node_label, skill_level } = req.body;
+    const { topic, node_label, skill_level, userId } = req.body;
 
     if (!topic || !node_label) {
         return res.status(400).json({ error: 'Topic and node_label are required' });
     }
 
+    let referenceContext = '';
+    if (userId && process.env.PINECONE_API_KEY) {
+        try {
+            const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            if (sourceMaterials.length > 0 || contextMaterials.length > 0) {
+                referenceContext = '\n\n### REFERENCE MATERIAL FROM UPLOADED DOCUMENTS (Use this to find relevant external resources):\n';
+                [...sourceMaterials, ...contextMaterials].forEach(m => {
+                    referenceContext += `- [${m.filename}]: ${m.content}\n`;
+                });
+            }
+        } catch (e) {
+            console.warn("RAG retrieval for resources failed:", e.message);
+        }
+    }
+
     const prompt = `${SYSTEM_PERSONA}
+${referenceContext}
 
 The learner is studying "${topic}", specifically the sub-topic: "${node_label}"
 Skill level: "${skill_level || 'beginner'}"

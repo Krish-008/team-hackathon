@@ -161,34 +161,39 @@ const Dashboard = () => {
     const handleNodeSelect = useCallback(async (node) => {
         setSelectedNode(node);
 
-        // Load practice scenarios for this node
-        setLoading(l => ({ ...l, practice: true }));
-        try {
-            const practiceResult = await apiFetch('generate-practice', {
-                topic: profile.topic,
-                node_label: node.label,
-                skill_level: profile.skill_level,
-                key_concepts: node.key_concepts,
-            });
-            setPracticeData(practiceResult);
-        } catch (err) {
-            console.error('Practice generation error:', err);
-        }
-        setLoading(l => ({ ...l, practice: false }));
+        // Immediate UI feedback: Clear old data and trigger loading state
+        setPracticeData(null);
+        setResourceData(null);
+        setLoading(l => ({ ...l, practice: true, resources: true }));
 
-        // Load resources for this node
-        setLoading(l => ({ ...l, resources: true }));
+        const currentUser = auth.currentUser;
+        const uid = currentUser ? currentUser.uid : (sessionStorage.getItem('questmap_uid') || 'anonymous');
+
         try {
-            const resourceResult = await apiFetch('generate-resources', {
-                topic: profile.topic,
-                node_label: node.label,
-                skill_level: profile.skill_level,
-            });
+            // FIRE IN PARALLEL to reduce lag
+            const [practiceResult, resourceResult] = await Promise.all([
+                apiFetch('generate-practice', {
+                    topic: profile.topic,
+                    userId: uid,
+                    node_label: node.label,
+                    skill_level: profile.skill_level,
+                    key_concepts: node.key_concepts,
+                }),
+                apiFetch('generate-resources', {
+                    topic: profile.topic,
+                    userId: uid,
+                    node_label: node.label,
+                    skill_level: profile.skill_level,
+                })
+            ]);
+
+            setPracticeData(practiceResult);
             setResourceData(resourceResult);
         } catch (err) {
-            console.error('Resource generation error:', err);
+            console.error('Node data generation error:', err);
+        } finally {
+            setLoading(l => ({ ...l, practice: false, resources: false }));
         }
-        setLoading(l => ({ ...l, resources: false }));
     }, [profile, apiFetch]);
 
     const handleDownloadSyllabus = useCallback(() => {
@@ -451,12 +456,12 @@ const Dashboard = () => {
                             )}
                             {activeTab === 'practice' && (
                                 <motion.div key="prac" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                                    <PracticePanel practiceData={practiceData} loading={loading.practice} />
+                                    <PracticePanel practiceData={practiceData} loading={loading.practice} selectedNode={selectedNode} />
                                 </motion.div>
                             )}
                             {activeTab === 'resources' && (
                                 <motion.div key="res" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                                    <ResourcePanel resourceData={resourceData} loading={loading.resources} />
+                                    <ResourcePanel resourceData={resourceData} loading={loading.resources} selectedNode={selectedNode} />
                                 </motion.div>
                             )}
                             {activeTab === 'context' && (
