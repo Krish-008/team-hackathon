@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const mongoose = require('mongoose');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Quest = require('./models/Quest');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -11,6 +13,15 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.use(cors());
 app.use(express.json());
+
+// Connect to MongoDB
+if (process.env.MONGODB_URI) {
+    mongoose.connect(process.env.MONGODB_URI)
+        .then(() => console.log('Connected to MongoDB Atlas'))
+        .catch(err => console.error('MongoDB identification failure:', err));
+} else {
+    console.warn('MONGODB_URI not found in .env. Persistence disabled.');
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -36,9 +47,9 @@ async function resolveYouTubeVideo(searchQuery) {
         );
         clearTimeout(timeout);
         if (!res.ok) throw new Error(`YouTube returned ${res.status}`);
-        
+
         const html = await res.text();
-        
+
         // Try to parse ytInitialData for accurate title + channel
         const initDataMatch = html.match(/var ytInitialData = ({.*?});/s);
         if (initDataMatch) {
@@ -47,7 +58,7 @@ async function resolveYouTubeVideo(searchQuery) {
                 const contents = data?.contents?.twoColumnSearchResultsRenderer
                     ?.primaryContents?.sectionListRenderer?.contents?.[0]
                     ?.itemSectionRenderer?.contents || [];
-                
+
                 for (const item of contents) {
                     const video = item.videoRenderer;
                     if (video?.videoId) {
@@ -60,7 +71,7 @@ async function resolveYouTubeVideo(searchQuery) {
                 }
             } catch { /* fall through to regex approach */ }
         }
-        
+
         // Fallback: regex for videoId only
         const matches = [...html.matchAll(/"videoId":"([^"]+)"/g)];
         const uniqueIds = [...new Set(matches.map(m => m[1]))];
@@ -78,7 +89,7 @@ async function resolveYouTubeVideo(searchQuery) {
  */
 async function resolveYouTubeUrls(resourceData) {
     if (!resourceData?.youtube_videos?.length) return resourceData;
-    
+
     const resolved = await Promise.all(
         resourceData.youtube_videos.map(async (video) => {
             const query = video.search_query || `${video.channel || ''} ${video.title || ''}`.trim();
@@ -92,7 +103,7 @@ async function resolveYouTubeUrls(resourceData) {
             };
         })
     );
-    
+
     return { ...resourceData, youtube_videos: resolved };
 }
 
@@ -115,11 +126,11 @@ async function resolveArticleUrl(searchQuery) {
         );
         clearTimeout(timeout);
         if (!res.ok) throw new Error(`DuckDuckGo returned ${res.status}`);
-        
+
         const html = await res.text();
         // DDG HTML puts result links in class="result__a" href="..."
         const resultLinks = [...html.matchAll(/class="result__a"[^>]*href="([^"]+)"/g)];
-        
+
         for (const match of resultLinks) {
             let url = match[1];
             // DDG sometimes wraps URLs in //duckduckgo.com/l/?uddg=...
@@ -143,7 +154,7 @@ async function resolveArticleUrl(searchQuery) {
  */
 async function resolveArticleUrls(resourceData) {
     if (!resourceData?.articles?.length) return resourceData;
-    
+
     const resolved = await Promise.all(
         resourceData.articles.map(async (article) => {
             const query = article.search_query || `${article.title || ''} ${article.source || ''}`.trim();
@@ -151,7 +162,7 @@ async function resolveArticleUrls(resourceData) {
             return { ...article, url: resolvedUrl, search_query: query };
         })
     );
-    
+
     return { ...resourceData, articles: resolved };
 }
 
@@ -502,7 +513,7 @@ Provide exactly 4 YouTube videos, 3 articles, and 2 books.`;
         console.log(`[${new Date().toISOString()}] Resources for: "${node_label}"`);
         const json = await callGemini(prompt);
         console.log(`[${new Date().toISOString()}] Generated resources: ${json.youtube_videos?.length} videos, ${json.articles?.length} articles.`);
-        
+
         // Resolve YouTube + Article search queries to real URLs (in parallel)
         console.log(`[${new Date().toISOString()}] Resolving resource URLs...`);
         const withYouTube = await resolveYouTubeUrls(json);
@@ -512,6 +523,47 @@ Provide exactly 4 YouTube videos, 3 articles, and 2 books.`;
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Resources Error:`, error.message);
         res.status(500).json({ error: 'Failed to generate resources', details: error.message });
+    }
+});
+
+// ─── 6. Save & Fetch Quests (History) ───────────────────────────────────────
+
+app.post('/api/save-quest', async (req, res) => {
+    try {
+        const { userId, topic, skillLevel, profileData, mapData, recommendations } = req.body;
+        if (!userId || !topic) return res.status(400).json({ error: 'UserId and Topic are required' });
+
+        const quest = new Quest({
+            userId,
+            topic,
+            skillLevel,
+            profileData,
+            mapData,
+            recommendations
+        });
+
+        await quest.save();
+        res.json({ message: 'Quest saved successfully', id: quest._id });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to save quest', details: err.message });
+    }
+});
+
+app.get('/api/user-quests/:uid', async (req, res) => {
+    try {
+        const quests = await Quest.find({ userId: req.params.uid }).sort({ timestamp: -1 });
+        res.json(quests);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch history', details: err.message });
+    }
+});
+
+app.delete('/api/quest/:id', async (req, res) => {
+    try {
+        await Quest.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Quest deleted' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete entry', details: err.message });
     }
 });
 
