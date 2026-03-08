@@ -1,0 +1,71 @@
+[dotenv@17.3.1] injecting env (4) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+QuestMap API running on port 5001
+Pinecone index "questmap" ready.
+RAG system initialized.
+Connected to MongoDB Atlas
+[2026-03-08T14:10:43.161Z] Profile generation for: "NLP"
+[2026-03-08T14:10:53.607Z] Profile generated successfully.
+[2026-03-08T14:10:53.613Z] Map generation for: "NLP"
+[RAG DEBUG] Querying Pinecone for User: FroW05HMsWVAU5BAl1XtQt7RLwc2, Topic: "NLP"
+[RAG DEBUG] Raw matches found: 15
+  - Match 0: Score: 0.6085, File: LLMVS+Appendix.pdf
+  - Match 1: Score: 0.6071, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 2: Score: 0.6034, File: A Survey of Video Datasets for Grounded Event Understanding.pdf
+  - Match 3: Score: 0.6032, File: LLMVS+Appendix.pdf
+  - Match 4: Score: 0.6031, File: LLMVS+Appendix.pdf
+  - Match 5: Score: 0.6017, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 6: Score: 0.6004, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 7: Score: 0.5988, File: LLMVS+Appendix.pdf
+  - Match 8: Score: 0.5975, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 9: Score: 0.5944, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 10: Score: 0.5944, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 11: Score: 0.5942, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 12: Score: 0.5939, File: LLMVS+Appendix.pdf
+  - Match 13: Score: 0.5928, File: LLMVS+Appendix.pdf
+  - Match 14: Score: 0.5928, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+[2026-03-08T14:10:54.172Z] Map RAG injected (15 source chunks, 0 context chunks).
+[2026-03-08T14:11:17.540Z] Map generated with 9 nodes.
+[2026-03-08T14:11:17.546Z] Recommendations for: "NLP"
+[2026-03-08T14:11:18.240Z] RAG context injected (3 sessions, 3 doc chunks).
+[2026-03-08T14:11:35.093Z] Generated 6 recommendations.
+Stored session context: session_FroW05HMsWVAU5BAl1XtQt7RLwc2_1772979095276
+[RAG DEBUG] Querying Pinecone for User: FroW05HMsWVAU5BAl1XtQt7RLwc2, Topic: "NLP Event Understanding with LLMs in Video"
+[RAG DEBUG] Querying Pinecone for User: FroW05HMsWVAU5BAl1XtQt7RLwc2, Topic: "NLP Event Understanding with LLMs in Video"
+[RAG DEBUG] Raw matches found: 5
+  - Match 0: Score: 0.7841, File: LLMVS+Appendix.pdf
+  - Match 1: Score: 0.7841, File: LLMVS+Appendix.pdf
+  - Match 2: Score: 0.7840, File: A Survey of Video Datasets for Grounded Event Understanding.pdf
+  - Match 3: Score: 0.7815, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 4: Score: 0.7770, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+[2026-03-08T14:12:50.753Z] Resources for: "Event Understanding with LLMs in Video"
+[RAG DEBUG] Raw matches found: 5
+  - Match 0: Score: 0.7841, File: LLMVS+Appendix.pdf
+  - Match 1: Score: 0.7841, File: LLMVS+Appendix.pdf
+  - Match 2: Score: 0.7840, File: A Survey of Video Datasets for Grounded Event Understanding.pdf
+  - Match 3: Score: 0.7815, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 4: Score: 0.7770, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+[2026-03-08T14:12:50.788Z] Practice for: "Event Understanding with LLMs in Video"
+[2026-03-08T14:13:12.280Z] Generated resources: 4 videos, 3 articles.
+[2026-03-08T14:13:12.281Z] Resolving resource URLs...
+[2026-03-08T14:13:13.809Z] All resource URLs resolved.
+[2026-03-08T14:13:19.116Z] Generated 5 practice scenarios.
+[RAG DEBUG] Querying Pinecone for User: FroW05HMsWVAU5BAl1XtQt7RLwc2, Topic: "NLP LLMs for Video Understanding Tasks"
+[RAG DEBUG] Querying Pinecone for User: FroW05HMsWVAU5BAl1XtQt7RLwc2, Topic: "NLP LLMs for Video Understanding Tasks"
+[RAG DEBUG] Raw matches found: 5
+  - Match 0: Score: 0.8160, File: LLMVS+Appendix.pdf
+  - Match 1: Score: 0.8107, File: LLMVS+Appendix.pdf
+  - Match 2: Score: 0.8083, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 3: Score: 0.8005, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 4: Score: 0.7989, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+[2026-03-08T14:14:23.126Z] Practice for: "LLMs for Video Understanding Tasks"
+[RAG DEBUG] Raw matches found: 5
+  - Match 0: Score: 0.8160, File: LLMVS+Appendix.pdf
+  - Match 1: Score: 0.8107, File: LLMVS+Appendix.pdf
+  - Match 2: Score: 0.8083, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 3: Score: 0.8005, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+  - Match 4: Score: 0.7989, File: Lee_Video_Summarization_with_Large_Language_Models_CVPR_2025_paper.pdf
+[2026-03-08T14:14:23.160Z] Resources for: "LLMs for Video Understanding Tasks"
+[2026-03-08T14:14:40.832Z] Generated 5 practice scenarios.
+[2026-03-08T14:14:48.314Z] Generated resources: 4 videos, 3 articles.
+[2026-03-08T14:14:48.314Z] Resolving resource URLs...
+[2026-03-08T14:14:49.924Z] All resource URLs resolved.
