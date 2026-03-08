@@ -49,7 +49,15 @@ if (process.env.PINECONE_API_KEY) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const SYSTEM_PERSONA = `You are QuestMap AI — a professional learning coach with deep expertise in curriculum design, Bloom's taxonomy, and personalized education. You always think step-by-step about WHY a recommendation suits the learner before making it. You never hallucinate URLs. When suggesting YouTube videos, you provide realistic search queries and estimated timestamp ranges based on typical tutorial structure, not fabricated links.`;
+const SYSTEM_PERSONA = `You are QuestMap AI — a professional learning coach with deep expertise in curriculum design, Bloom's taxonomy, and personalized education. 
+
+CRITICAL RAG GROUNDING RULES:
+1. If "REFERENCE MATERIAL" or "STRICT REFERENCE MATERIAL" is provided in the prompt, you MUST prioritize it over your internal knowledge. 
+2. Use the terminology, specific names, and concepts found in the provided snippets. 
+3. Avoid hallucinating concepts, frameworks, or advanced jargon that is NOT present in the provided context or intrinsic to the basic core topic.
+4. If you aren't sure if a term is in the document, refer to it as "from your provided materials" or stick to simpler explanations.
+
+You never hallucinate URLs. When suggesting YouTube videos, you provide realistic search queries and estimated timestamp ranges based on typical tutorial structure, not fabricated links.`;
 
 /**
  * Resolve a YouTube search query into a real video URL + title by scraping YouTube search results.
@@ -416,10 +424,14 @@ Goals: "${goals || 'General mastery'}"
 Known knowledge gaps: ${JSON.stringify(knowledge_gaps || [])}
 Learning history summary: ${JSON.stringify(learning_history || [])}
 
-Generate personalized next-step learning recommendations. For EACH recommendation, you MUST:
-1. First REASON about why this is appropriate given their specific background and history
-2. Then provide the recommendation with clear reasoning the learner can understand
-3. Tie the reason to specific evidence from their profile (e.g., "Since you completed X, you're ready for Y")
+### INSTRUCTIONS:
+1. Generate 6 personalized next-step learning recommendations.
+2. If "Source Material" chunks are provided below, ensure at least 3 recommendations are directly derived from that material to maintain curriculum alignment.
+3. If "Personal Context" chunks indicate specific mistakes or weaknesses, prioritize those as "High" priority.
+4. For EACH recommendation:
+   - First REASON about why this is appropriate.
+   - Then provide the recommendation.
+   - Explicitly tie the reason to their profile or the uploaded documents (e.g., "Based on your uploaded textbook Chapter 4...").
 
 Return valid JSON matching this exact schema:
 {
@@ -428,12 +440,11 @@ Return valid JSON matching this exact schema:
             "id": 1,
             "priority": "high | medium | low",
             "title": "What to learn next",
-            "description": "Detailed description of this learning step",
-            "reason": "Specific, personalized reason WHY this is recommended NOW, referencing their history/gaps",
+            "description": "Detailed description",
+            "reason": "Specific, personalized reason grounding it in their history or uploaded docs",
             "estimated_hours": 4,
             "difficulty": "beginner | intermediate | advanced",
             "prerequisites_met": true,
-            "related_to_goal": "Which of their goals this serves"
         }
     ]
 }
@@ -445,10 +456,11 @@ Generate exactly 6 recommendations ordered by priority. At least 2 must be "high
         
         // RAG: Retrieve relevant past context
         let ragContext = '';
+        let ragResults = null;
         const userId = req.body.userId || 'anonymous';
         if (process.env.PINECONE_API_KEY) {
             try {
-                const ragResults = await retrieveRelevantContext(userId, `${topic} ${skill_level || ''}`);
+                ragResults = await retrieveRelevantContext(userId, `${topic} ${skill_level || ''}`);
                 ragContext = formatRAGContext(ragResults);
                 if (ragContext) console.log(`[${new Date().toISOString()}] RAG context injected (${ragResults.sessions.length} sessions, ${ragResults.documents.length} doc chunks).`);
             } catch (ragErr) {
@@ -466,7 +478,14 @@ Generate exactly 6 recommendations ordered by priority. At least 2 must be "high
             storeSessionContext(userId, { topic, skill_level, type: 'recommendations', node_label: 'overview', summary: `Generated ${json.recommendations?.length} recommendations for ${topic}` }).catch(() => {});
         }
         
-        res.json(json);
+        // Include debug context in response for frontend transparency
+        const _debug_context = {
+            source: (ragResults?.documents || []).filter(d => d.category === 'source').map(m => ({ filename: m.filename, content: m.content })),
+            personal: (ragResults?.documents || []).filter(d => d.category === 'context').map(m => ({ filename: m.filename, content: m.content })),
+            sessions: (ragResults?.sessions || []).map(s => ({ topic: s.topic, summary: s.summary }))
+        };
+
+        res.json({ ...json, _debug_context });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Recommendations Error:`, error.message);
         res.status(500).json({ error: 'Failed to generate recommendations', details: error.message });
@@ -483,11 +502,16 @@ app.post('/api/generate-practice', async (req, res) => {
     }
 
     let referenceContext = '';
+    let sourceMaterials = [];
+    let contextMaterials = [];
     if (userId && process.env.PINECONE_API_KEY) {
         try {
-            const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            const results = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            sourceMaterials = results.sourceMaterials;
+            contextMaterials = results.contextMaterials;
+            
             if (sourceMaterials.length > 0 || contextMaterials.length > 0) {
-                referenceContext = '\n\n### REFERENCE MATERIAL FROM UPLOADED DOCUMENTS (Ground the questions in this context):\n';
+                referenceContext = '\n\n### STRICT REFERENCE MATERIAL (Only use these concepts/terms):\n';
                 [...sourceMaterials, ...contextMaterials].forEach(m => {
                     referenceContext += `- [${m.filename}]: ${m.content}\n`;
                 });
@@ -504,10 +528,17 @@ The learner is studying "${topic}" and is currently on the sub-topic: "${node_la
 Skill level: "${skill_level || 'beginner'}"
 Key concepts to test: ${JSON.stringify(key_concepts || [])}
 
-Generate practice scenarios to test and reinforce their understanding. Include a MIX of question types. Think step-by-step:
-1. What are the most important concepts the learner must understand here?
-2. What common misconceptions exist?
-3. Design questions that test understanding, not just memorization
+Generate practice scenarios to test and reinforce their understanding. 
+
+CRITICAL GUARDRAIL:
+- You MUST only test concepts and use terminology found in the ABOVE REFERENCE MATERIAL or directly intrinsic to "${node_label}". 
+- Do NOT introduce outside framework names or advanced jargon that is NOT in the reference material.
+- If the reference material is empty, use standard educational best practices for "${node_label}".
+
+Think step-by-step:
+1. What are the most important concepts mentioned in the provided document chunks?
+2. What terms are specific to this user's source material?
+3. Design questions that test understanding of THIS material, not general trivia.
 
 Return valid JSON matching this exact schema:
 {
@@ -549,7 +580,14 @@ Generate exactly 5 scenarios: 2 multiple_choice, 2 scenario, 1 code_challenge. E
         console.log(`[${new Date().toISOString()}] Practice for: "${node_label}"`);
         const json = await callGemini(prompt);
         console.log(`[${new Date().toISOString()}] Generated ${json.scenarios?.length} practice scenarios.`);
-        res.json(json);
+        
+        // Include debug context
+        const _debug_context = {
+            source: sourceMaterials.map(m => ({ filename: m.filename, content: m.content })),
+            personal: contextMaterials.map(m => ({ filename: m.filename, content: m.content }))
+        };
+
+        res.json({ ...json, _debug_context });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Practice Error:`, error.message);
         res.status(500).json({ error: 'Failed to generate practice', details: error.message });
@@ -566,9 +604,14 @@ app.post('/api/generate-resources', async (req, res) => {
     }
 
     let referenceContext = '';
+    let sourceMaterials = [];
+    let contextMaterials = [];
     if (userId && process.env.PINECONE_API_KEY) {
         try {
-            const { sourceMaterials, contextMaterials } = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            const results = await retrieveCategorizedContext(userId, `${topic} ${node_label}`, 5);
+            sourceMaterials = results.sourceMaterials;
+            contextMaterials = results.contextMaterials;
+
             if (sourceMaterials.length > 0 || contextMaterials.length > 0) {
                 referenceContext = '\n\n### REFERENCE MATERIAL FROM UPLOADED DOCUMENTS (Use this to find relevant external resources):\n';
                 [...sourceMaterials, ...contextMaterials].forEach(m => {
@@ -652,7 +695,14 @@ Provide exactly 4 YouTube videos, 3 articles, and 2 books.`;
         const withYouTube = await resolveYouTubeUrls(json);
         const withArticles = await resolveArticleUrls(withYouTube);
         console.log(`[${new Date().toISOString()}] All resource URLs resolved.`);
-        res.json(withArticles);
+        
+        // Include debug context
+        const _debug_context = {
+            source: sourceMaterials.map(m => ({ filename: m.filename, content: m.content })),
+            personal: contextMaterials.map(m => ({ filename: m.filename, content: m.content }))
+        };
+
+        res.json({ ...withArticles, _debug_context });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Resources Error:`, error.message);
         res.status(500).json({ error: 'Failed to generate resources', details: error.message });

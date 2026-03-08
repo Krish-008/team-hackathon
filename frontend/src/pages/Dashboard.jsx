@@ -34,6 +34,7 @@ const Dashboard = () => {
     const [recommendations, setRecommendations] = useState(null);
     const [practiceData, setPracticeData] = useState(null);
     const [resourceData, setResourceData] = useState(null);
+    const [recDebugContext, setRecDebugContext] = useState(null);
 
     // UI states
     const [selectedNode, setSelectedNode] = useState(null);
@@ -124,6 +125,7 @@ const Dashboard = () => {
                     knowledge_gaps: profResult.knowledge_gaps,
                 });
                 setRecommendations(recResult.recommendations);
+                setRecDebugContext(recResult._debug_context);
                 setLoading(l => ({ ...l, recommendations: false }));
 
                 setInitialLoadComplete(true);
@@ -466,7 +468,9 @@ const Dashboard = () => {
                             )}
                             {activeTab === 'context' && (
                                 <motion.div key="ctx" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                                    <KnowledgeContext context={mapData._debug_context} />
+                                    <KnowledgeContext 
+                                        context={selectedNode ? (practiceData?._debug_context || resourceData?._debug_context) : (recDebugContext || mapData?._debug_context)} 
+                                    />
                                 </motion.div>
                             )}
                         </AnimatePresence>

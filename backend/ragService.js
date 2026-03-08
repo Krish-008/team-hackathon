@@ -68,17 +68,54 @@ async function generateEmbedding(text) {
 }
 
 /**
+ * Detect if a text chunk is likely a citation list or bibliography.
+ */
+function isCitationHeavy(text) {
+    // Patterns for dense citations like [1, 2], (Author, 2020), "Vol. 4", "pp. 123-456"
+    const citationPatterns = [
+        /\[\d+(,\s*\d+)*\]/g, // [1, 2, 3]
+        /\(\w+,\s*\d{4}\)/g,  // (Smith, 2023)
+        /pp\.\s*\d+-\d+/g,    // pp. 123-145
+        /vol\.\s*\d+/gi,      // Vol. 4/vol. 4
+        /doi:\s*10\.\d+/gi,   // DOI references
+        /https?:\/\/[^\s]+/g, // URLs
+    ];
+
+    let matchCount = 0;
+    citationPatterns.forEach(pattern => {
+        const matches = text.match(pattern);
+        if (matches) matchCount += matches.length;
+    });
+
+    // If more than 5 explicit citation markers in a 500-word chunk, it's likely a bibliography
+    // OR if the chunk is very short and contains at least 2 markers.
+    const words = text.split(/\s+/).length;
+    const ratio = matchCount / words;
+
+    return (matchCount > 5) || (words < 50 && matchCount >= 2);
+}
+
+/**
  * Split text into overlapping chunks for embedding.
  */
-function chunkText(text, chunkSize = 500, overlap = 100) {
+function chunkText(text, chunkSize = 500, overlap = 150) {
     const words = text.split(/\s+/);
     const chunks = [];
 
     for (let i = 0; i < words.length; i += chunkSize - overlap) {
         const chunk = words.slice(i, i + chunkSize).join(' ');
-        if (chunk.trim().length > 20) {
-            chunks.push(chunk);
+        
+        // Quality Filters:
+        // 1. Length check
+        if (chunk.trim().length < 50) continue;
+        
+        // 2. Citation/Bibliography check
+        if (isCitationHeavy(chunk)) {
+            // console.log("[RAG] Discarding citation-heavy chunk");
+            continue;
         }
+
+        chunks.push(chunk);
     }
     return chunks;
 }
