@@ -7,6 +7,7 @@ import App from './App.jsx'
 import Login from './pages/Login.jsx'
 import Profile from './pages/Profile.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import LevelQuiz from './pages/LevelQuiz.jsx'
 
 const rootElement = document.getElementById('root');
 
@@ -25,7 +26,9 @@ try {
                     <Route path="/login" element={<Login />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/quiz" element={<LevelQuiz />} />
                 </Routes>
+
             </BrowserRouter>
         </StrictMode>
     );

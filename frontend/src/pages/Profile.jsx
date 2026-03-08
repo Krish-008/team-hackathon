@@ -34,6 +34,10 @@ const Profile = () => {
             if (user) {
                 fetchQuests(user.uid);
                 fetchDocuments(user.uid);
+            } else {
+                // Fallback: fetch quests saved without login (matches Dashboard save logic)
+                const fallbackUid = sessionStorage.getItem('questmap_uid') || 'anonymous';
+                fetchQuests(fallbackUid);
             }
         });
         return unsubscribe;
@@ -80,7 +84,10 @@ const Profile = () => {
     const handleDeleteQuest = async (id) => {
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/quest/${id}`, { method: 'DELETE' });
-            if (res.ok) fetchQuests(currentUser.uid);
+            if (res.ok) {
+                const uid = currentUser?.uid || sessionStorage.getItem('questmap_uid') || 'anonymous';
+                fetchQuests(uid);
+            }
         } catch (err) {
             console.error("Delete failed:", err);
         }

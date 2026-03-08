@@ -593,6 +593,51 @@ Generate exactly 5 scenarios: 2 multiple_choice, 2 scenario, 1 code_challenge. E
         res.status(500).json({ error: 'Failed to generate practice', details: error.message });
     }
 });
+app.post('/api/generate-quiz', async (req, res) => {
+    const { topic, skill_level, node_label } = req.body;
+
+    if (!topic) {
+        return res.status(400).json({ error: 'Topic is required' });
+    }
+
+    const focusScope = node_label ? `specifically focusing on the sub-topic: "${node_label}"` : `covering the general domain`;
+
+    const prompt = `${SYSTEM_PERSONA}
+
+The learner is studying "${topic}", ${focusScope}.
+Current Skill Level: "${skill_level || 'beginner'}".
+
+Generate a Candy-Crush style progressive "Level Quiz" with exactly 5 levels. Each level must be slightly harder than the previous one. The goal is to test their mastery step-by-step.
+
+Return valid JSON matching this exact schema WITHOUT Markdown formatting:
+{
+    "quiz_title": "Mastery Check: ${topic}",
+    "levels": [
+        {
+            "level_number": 1,
+            "title": "Level 1: The Basics (Catchy Title)",
+            "description": "A short, fun description of what this level tests.",
+            "question": "A clear multiple-choice question testing fundamental concepts.",
+            "options": ["Option A", "Option B", "Option C", "Option D"],
+            "correct_index": 0,
+            "success_message": "Awesome! You've grasped the fundamentals.",
+            "failure_message": "Not quite! Remember that [brief explanation]."
+        }
+    ]
+}
+
+Ensure there are exactly 5 objects in the "levels" array, progressing from fundamental to advanced application. Provide EXACTLY 4 options for each question. "correct_index" must be an integer from 0 to 3.`;
+
+    try {
+        console.log(`[${new Date().toISOString()}] Generating Level Quiz for: "${topic}" ${node_label ? `(${node_label})` : ''}`);
+        const json = await callGemini(prompt);
+        console.log(`[${new Date().toISOString()}] Generated ${json.levels?.length || 0} quiz levels.`);
+        res.json(json);
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] Quiz Error:`, error.message);
+        res.status(500).json({ error: 'Failed to generate quiz', details: error.message });
+    }
+});
 
 // ─── 5. Generate External Resources (YouTube Snippets + Articles) ──────────
 

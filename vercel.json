@@ -1,20 +1,12 @@
 {
     "version": 2,
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "outputDirectory": "frontend/dist",
+    "framework": "vite",
     "rewrites": [
         {
-            "source": "/api/(.*)",
-            "destination": "/backend/server.js"
-        },
-        {
             "source": "/(.*)",
-            "destination": "/frontend/index.html"
-        }
-    ],
-    "redirects": [
-        {
-            "source": "/frontend/(.*)",
-            "destination": "/$1",
-            "permanent": true
+            "destination": "/index.html"
         }
     ]
 }

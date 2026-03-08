@@ -315,6 +315,9 @@ const Dashboard = () => {
                                 </span>
                             </div>
                         )}
+                        <button onClick={() => navigate('/quiz')} className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/40 text-[10px] font-black uppercase tracking-widest text-blue-300 hover:text-white transition-all">
+                            Test Mastery
+                        </button>
                         <button onClick={handleNewTopic} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
                             Change Mesh
                         </button>
